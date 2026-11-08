@@ -461,7 +461,7 @@ textarea { font-size: 15.5px; }
     <div class="orn" aria-hidden="true"><i></i></div>
     <p class="lead">Erzähl dem Studio einmal von deinem Profil, deinen Boards und deiner Bildwelt. Es plant deinen Batch und gibt dir jeden Pin fertig zum Umsetzen.</p>
     <div class="flow" aria-label="PSOD Power-Logik"><span>FINDEN</span><span>STOPPEN</span><span>SPEICHERN</span><span>KLICKEN</span></div>
-    <p class="example"><b>Beispiel:</b> Alle Felder zeigen das Profil von PSOD – Pinterest sichtbar ohne Druck. Überschreibe sie einfach mit deinen Angaben.</p>
+    <p class="example"><b>Kleine Hilfe:</b> Die zarten grauen Beispiele in den Feldern stammen aus dem Profil von PSOD – Pinterest sichtbar ohne Druck. Sie zeigen dir, was du eintragen kannst, und verschwinden, sobald du tippst.</p>
   </div></header>
 
   <section class="accounts" aria-label="Pinterest-Profile">
@@ -532,7 +532,7 @@ textarea { font-size: 15.5px; }
       <div class="block">
         <div class="boards" id="boards"></div>
         <div class="add-board">
-          <div class="field"><label for="new-board">Neues Board</label><input type="text" id="new-board" placeholder="Name des Boards" autocomplete="off"></div>
+          <div class="field"><label for="new-board">Neues Board</label><input type="text" id="new-board" placeholder="z. B. Pinterest für Anfänger" autocomplete="off"></div>
           <button class="btn ghost small" id="add-board" type="button">Hinzufügen</button>
         </div>
       </div>
@@ -738,11 +738,21 @@ textarea { font-size: 15.5px; }
   var store = null;
   try { store = JSON.parse(localStorage.getItem(AKEY) || "null"); } catch (e) {}
   if (!store || !Array.isArray(store.list) || !store.list.length) {
-    var first = JSON.parse(JSON.stringify(DEFAULTS));
+    var first = normalize({});
     try { var raw = localStorage.getItem(KEY); if (raw) first = Object.assign(first, JSON.parse(raw)); } catch (e) {}
     store = { active: "p1", list: [{ id: "p1", data: first }] };
     try { var ob = localStorage.getItem("ppb-batch-v1"); if (ob) localStorage.setItem("ppb-batch-v1-p1", ob); } catch (e) {}
   }
+  try {
+    if (!localStorage.getItem("ppb-blank-v1")) {
+      store.list.forEach(function (a) {
+        var d = a.data || {};
+        if (d.pname === DEFAULTS.pname && d.nische === DEFAULTS.nische && d.zg === DEFAULTS.zg && d.bio === DEFAULTS.bio) a.data = normalize({});
+        try { var b = JSON.parse(localStorage.getItem("ppb-batch-v1-" + a.id) || "null"); if (b && b.pins && b.pins.length && b.pins.every(function (x) { return x.idx >= 0; })) localStorage.removeItem("ppb-batch-v1-" + a.id); } catch (e) {}
+      });
+      localStorage.setItem("ppb-blank-v1", "1"); localStorage.setItem(AKEY, JSON.stringify(store));
+    }
+  } catch (e) {}
   function curAcc() { for (var i = 0; i < store.list.length; i++) if (store.list[i].id === store.active) return store.list[i]; store.active = store.list[0].id; return store.list[0]; }
   var profile = normalize(curAcc().data);
   curAcc().data = profile;
@@ -870,7 +880,7 @@ textarea { font-size: 15.5px; }
     var box = $("offers"); box.innerHTML = "";
     profile.offers.forEach(function (o, i) {
       var row = document.createElement("div"); row.className = "offer";
-      var a = document.createElement("input"); a.type = "text"; a.id = "of-n" + i; a.placeholder = "Name, z. B. Freebie"; a.value = o.name; a.setAttribute("aria-label", "Name der Zielseite " + (i + 1));
+      var a = document.createElement("input"); a.type = "text"; a.id = "of-n" + i; a.placeholder = i === 0 ? "z. B. Kurs: PSOD – Pinterest sichtbar ohne Druck" : i === 1 ? "z. B. Pinterest Power Guide" : "z. B. Freebie"; a.value = o.name; a.setAttribute("aria-label", "Name der Zielseite " + (i + 1));
       var b = document.createElement("input"); b.type = "url"; b.className = "ol"; b.id = "of-l" + i; b.placeholder = "Link (optional)"; b.value = o.link; b.setAttribute("aria-label", "Link der Zielseite " + (i + 1)); b.setAttribute("autocapitalize", "off");
       var d = document.createElement("button"); d.type = "button"; d.className = "x"; d.textContent = "×"; d.setAttribute("aria-label", "Zielseite " + (i + 1) + " entfernen");
       a.addEventListener("input", function () { profile.offers[i].name = a.value; });
@@ -1593,7 +1603,8 @@ textarea { font-size: 15.5px; }
   }
   function renderPins() {
     var box = $("pins"); box.innerHTML = "";
-    if (!lastResult.length) { box.innerHTML = '<p class="empty">Noch kein Batch. Plane ihn im Kapitel IV.</p>'; return; }
+    $("res-head").hidden = !lastResult.length;
+    if (!lastResult.length) { box.innerHTML = '<div class="empty"><p>Hier erscheinen deine Pins, sobald du deinen ersten Batch erstellt hast.</p><div class="row" style="justify-content:center;margin-top:18px"><button class="btn small" type="button" data-go="batch">Zum Batch</button><button class="link" type="button" id="show-example">PSOD-Beispiel ansehen</button></div></div>'; return; }
     assignDates(lastResult, startIso(), false);
     var cur = null;
     sortedIdx().forEach(function (k) {
@@ -1613,6 +1624,14 @@ textarea { font-size: 15.5px; }
   $("opt-text").addEventListener("change", refreshPins);
   $("copy-all").addEventListener("click", function () { if (!lastResult.length) { toast("Erst einen Batch erstellen"); return; } copyText(lastResult.map(pinAsText).join("\n\n────────────────\n\n")); });
 
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("#show-example")) return;
+    var keep = saveBatch; saveBatch = function () {};
+    build(); saveBatch = keep;
+    $("res-sub").textContent = "So sieht ein fertiger Batch aus. Das ist nur ein Beispiel und wird nicht gespeichert.";
+    $("res-note").textContent = "Beispiel-Batch von PSOD – Pinterest sichtbar ohne Druck.";
+    $("res-head").hidden = false;
+  });
   /* ---------- Planer ---------- */
   var openRows = {};
   function scrollToToday() {
@@ -1624,7 +1643,7 @@ textarea { font-size: 15.5px; }
   function renderPlanner() {
     var box = $("plan"); box.innerHTML = "";
     var n = lastResult.length;
-    if (!n) { box.innerHTML = '<p class="empty">Noch keine Pins. Erstelle zuerst einen Batch im Kapitel IV.</p>'; $("plan-progress").hidden = true; $("plan-next").textContent = ""; return; }
+    if (!n) { box.innerHTML = '<div class="empty"><p>Hier planst du deine Pins, sobald dein erster Batch da ist.</p><div class="row" style="justify-content:center;margin-top:18px"><button class="btn small" type="button" data-go="batch">Zum Batch</button></div></div>'; $("plan-progress").hidden = true; $("plan-next").textContent = ""; return; }
     assignDates(lastResult, startIso(), false);
     var d = lastResult.filter(function (p) { return p.done; }).length;
     $("plan-progress").hidden = false;
@@ -1688,7 +1707,7 @@ textarea { font-size: 15.5px; }
 
   /* ---------- Start ---------- */
   /* ---------- Profile verwalten ---------- */
-  function accName(d) { var n = (d.pname || "").trim(); return n ? n.split(/\s[–-]\s/)[0] : "Neues Profil"; }
+  function accName(d) { var n = (d.pname || "").trim(); return n ? n.split(/\s[–-]\s/)[0] : "Mein Profil"; }
   function renderAccounts() {
     var box = $("accounts"); box.innerHTML = "";
     store.list.forEach(function (a) {
@@ -1706,7 +1725,7 @@ textarea { font-size: 15.5px; }
   }
   function fillAll() {
     fillFields(); renderGoals(); renderOffers(); renderBoards(); renderPresets(); renderParsed(); renderSlots(); renderSummary();
-    if (!loadBatch()) { lastResult = []; $("res-sub").textContent = "Für dieses Profil gibt es noch keinen Batch."; $("mix").textContent = ""; renderPins(); }
+    if (!loadBatch()) { lastResult = []; $("res-sub").textContent = ""; $("mix").textContent = ""; renderPins(); }
   }
   function switchTo(id, quiet) {
     persist(true);
@@ -1797,7 +1816,7 @@ textarea { font-size: 15.5px; }
   fillFields(); renderAccounts();
   renderGoals(); renderOffers(); renderBoards(); renderPresets(); renderParsed(); renderSlots(); updTotal(); renderSummary();
   var hasOwn = loadBatch() && lastResult.some(function (p) { return p.idx < 0; });
-  if (!lastResult.length) build();
+  if (!lastResult.length) renderPins();
   var start = (location.hash || "").replace("#", "");
   if (views.indexOf(start) >= 0) show(start, true);
   else if (hasOwn) { show("planer", true); setTimeout(scrollToToday, 60); }
